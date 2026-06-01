@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use lettre::{
     message::{Mailbox, MultiPart, SinglePart},
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
@@ -61,13 +62,14 @@ impl MailMessage {
         self
     }
 
-    pub async fn send(self, config: &MailConfig) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send(self, config: &MailConfig) -> Result<()> {
         let from: Mailbox = config.from_name.parse()
-            .map_err(|e| format!("无效的发件人地址 '{}': {}", config.from_name, e))?;
-        let to: Mailbox = self.to.ok_or("缺少收件人")?.parse()
-            .map_err(|e| format!("无效的收件人地址: {}", e))?;
-        let subject = self.subject.ok_or("缺少主题")?;
-        let body = self.body.ok_or("缺少正文")?;
+            .with_context(|| format!("无效的发件人地址 '{}'", config.from_name))?;
+        let to: Mailbox = self.to.ok_or(anyhow::anyhow!("缺少收件人"))?
+            .parse()
+            .with_context(|| "无效的收件人地址")?;
+        let subject = self.subject.ok_or(anyhow::anyhow!("缺少主题"))?;
+        let body = self.body.ok_or(anyhow::anyhow!("缺少正文"))?;
 
         let email = if self.attachments.is_empty() {
             let mut builder = Message::builder()
@@ -88,7 +90,7 @@ impl MailMessage {
 
             for (path, mime_override) in &self.attachments {
                 let data = std::fs::read(path)
-                    .map_err(|e| format!("读取附件失败 '{}': {}", path.display(), e))?;
+                    .with_context(|| format!("读取附件失败 '{}'", path.display()))?;
                 let filename = path.file_name()
                     .unwrap_or_default()
                     .to_string_lossy()
@@ -115,7 +117,8 @@ impl MailMessage {
             config.auth_code.clone(),
         );
 
-        let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_server)?
+        let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_server)
+            .with_context(|| format!("无效的 SMTP 服务器 '{}'", config.smtp_server))?
             .credentials(creds)
             .port(465)
             .build();
@@ -159,7 +162,7 @@ impl Default for MailMessage {
 }
 
 impl MailConfig {
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let data = std::fs::read_to_string(path)?;
         Ok(serde_json::from_str(&data)?)
     }
