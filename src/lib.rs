@@ -5,6 +5,7 @@ use serde_json:: { json, Value };
 use anyhow::{ anyhow, Result };
 
 pub mod mail;
+pub mod aichat;
 
 pub fn print_json(value: &Value) {
     println!("{}", serde_json::to_string_pretty(value).unwrap())
