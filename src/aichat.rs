@@ -1,8 +1,8 @@
-use serde_json::{ Value };
+use serde_json::{ Value, json };
 use reqwest::Client;
 use anyhow::{ Result, anyhow, Context };
 
-pub fn extract_chat_result(chat_result: &Value) -> (String, Value, String, u64) {
+pub fn extract_chat_result(chat_result: &Value) -> (String, Value, String, Value) {
     let content = chat_result["choices"][0]["message"]["content"]
         .as_str()
         .unwrap_or_default();
@@ -14,12 +14,15 @@ pub fn extract_chat_result(chat_result: &Value) -> (String, Value, String, u64) 
         .get("tool_calls")
         .map(|v| v.clone())
         .unwrap_or_else(|| Value::Array(Vec::new()));
-    let total_tokens = chat_result["usage"]["total_tokens"].as_u64().unwrap_or(0);
+    let tokens: Value = chat_result
+        .get("usage")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
     (
         content.to_string(),
         tool_calls,
         reasoning.to_string(),
-        total_tokens,
+        tokens,
     )
 }
 
